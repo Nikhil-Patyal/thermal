@@ -1,0 +1,1 @@
+# Hotspots app package initialization

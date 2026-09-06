@@ -1,0 +1,51 @@
+services:
+  - type: web
+    name: hotspot-intel-web
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    autoDeploy: true
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: NASA_FIRMS_API_KEY
+        sync: false # Set manually in Render Dashboard
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: hotspot-redis
+          property: connectionString
+      - key: POSTGRES_DB
+        value: hotspot_intel
+      - key: POSTGRES_USER
+        value: postgres
+      - key: POSTGRES_PASSWORD
+        sync: false # Set manually in Render Dashboard
+      - key: POSTGRES_HOST
+        value: postgres-db # Internal host name
+
+  - type: worker
+    name: hotspot-celery-worker
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: "celery -A config worker --loglevel=info"
+    plan: starter
+    autoDeploy: true
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: hotspot-redis
+          property: connectionString
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          type: web
+          name: hotspot-intel-web
+          envVarKey: DJANGO_SECRET_KEY
+      
+  - type: redis
+    name: hotspot-redis
+    plan: free
+    ipAllowList: [] # internal only

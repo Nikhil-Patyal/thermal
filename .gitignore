@@ -1,0 +1,8 @@
+# Environment Variables (so API keys don't leak)
+.env
+.env.*
+backend/.env
+
+# Large Files (Uploaded to Google Drive)
+.python/Lib/site-packages/llvmlite/binding/llvmlite.dll
+.python/Lib/site-packages/xgboost/lib/xgboost.dll

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import styled from 'styled-components';
 import { MapComponent } from './components/Map';
 import { HotspotModal } from './components/HotspotModal';
@@ -35,19 +35,48 @@ const Brand = styled.h1`
   gap: 8px;
 `;
 
+const StatsBadge = styled.div`
+  background: rgba(255, 69, 0, 0.15);
+  border: 1px solid rgba(255, 69, 0, 0.4);
+  color: #ff7849;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+`;
+
+const NavActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+`;
+
 function App() {
   const [selectedHotspot, setSelectedHotspot] = useState<number | null>(null);
+  const [totalCount, setTotalCount] = useState<number>(0);
 
   return (
     <AppContainer>
       <Navbar>
         <Brand>
           <Flame color={theme.colors.danger} />
-          NASA FIRMS Intelligence
+          AGNI-DRISHTI: NASA FIRMS Intelligence
         </Brand>
+        <NavActions>
+          <StatsBadge>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff4500', display: 'inline-block' }} />
+            {totalCount > 0 ? `${totalCount} Active Anomalies Monitored` : 'Active Anomalies Monitored'}
+          </StatsBadge>
+        </NavActions>
       </Navbar>
       
-      <MapComponent onHotspotClick={(id) => setSelectedHotspot(id)} />
+      <MapComponent 
+        onHotspotClick={(id) => setSelectedHotspot(id)} 
+        onDataLoaded={(count) => setTotalCount(count)}
+      />
       
       {selectedHotspot && (
         <HotspotModal 

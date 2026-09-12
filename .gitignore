@@ -6,3 +6,13 @@ backend/.env
 # Large Files (Uploaded to Google Drive)
 .python/Lib/site-packages/llvmlite/binding/llvmlite.dll
 .python/Lib/site-packages/xgboost/lib/xgboost.dll
+
+node_modules/
+frontend/node_modules/
+venv/
+backend/venv/
+__pycache__/
+*.pyc
+.DS_Store
+.python/
+catboost_info/

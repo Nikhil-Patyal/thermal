@@ -19,14 +19,16 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'django.contrib.staticfiles',
+    'django.contrib.gis',
     'rest_framework',
     'corsheaders',
     
     # AGNI-DRISHTI Apps
+    'hotspots.apps.HotspotsConfig',
     'firms.apps.FirmsConfig',
     'thermal_sources.apps.ThermalSourcesConfig',
     'infrastructure.apps.InfrastructureConfig',
+    'satellite_imagery.apps.SatelliteImageryConfig',
 ]
 
 MIDDLEWARE = [
@@ -63,9 +65,9 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.contrib.gis.db.backends.postgis',
-        'NAME': os.getenv('POSTGRES_DB', 'hotspot_intel'),
-        'USER': os.getenv('POSTGRES_USER', 'postgres'),
-        'PASSWORD': os.getenv('POSTGRES_PASSWORD', ''),
+        'NAME': os.getenv('POSTGRES_DB', 'agni_drishti'),
+        'USER': os.getenv('POSTGRES_USER', 'agni_user'),
+        'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'agni_password'),
         'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
         'PORT': os.getenv('POSTGRES_PORT', '5432'),
     }
@@ -100,3 +102,27 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOW_ALL_ORIGINS = True  # For dev only
+
+# -----------------------------------------------------------
+# Media files (satellite imagery cache)
+# -----------------------------------------------------------
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+# Sentinel Hub credentials (read from .env)
+SENTINEL_HUB_CLIENT_ID = os.getenv('SENTINEL_HUB_CLIENT_ID', '')
+SENTINEL_HUB_CLIENT_SECRET = os.getenv('SENTINEL_HUB_CLIENT_SECRET', '')
+SENTINEL_HUB_TOKEN_URL = os.getenv('SENTINEL_HUB_TOKEN_URL', 'https://services.sentinel-hub.com/oauth/token')
+SENTINEL_HUB_PROCESS_URL = os.getenv('SENTINEL_HUB_PROCESS_URL', 'https://services.sentinel-hub.com/api/v1/process')
+# Directory where fetched satellite imagery tiles are cached (relative to MEDIA_ROOT)
+SATELLITE_IMAGERY_CACHE_DIR = MEDIA_ROOT / 'satellite'
+# Tuning parameters
+SENTINEL_HUB_MAX_CLOUD = int(os.getenv('SENTINEL_HUB_MAX_CLOUD', '20'))  # % cloud coverage allowed
+SENTINEL_HUB_OUTPUT_SIZE = int(os.getenv('SENTINEL_HUB_OUTPUT_SIZE', '256'))  # pixels (square)
+SENTINEL_HUB_BBOX_RADIUS_KM = float(os.getenv('SENTINEL_HUB_BBOX_RADIUS_KM', 0.8))  # 0.8 km radius → 1.6 km × 1.6 km area
+SENTINEL_HUB_DATE_RANGE_DAYS = int(os.getenv('SENTINEL_HUB_DATE_RANGE_DAYS', '1825'))  # days back from today (5 years)
+
+# -----------------------------------------------------------
+# Geography Context APIs (Copernicus & Overpass)
+# -----------------------------------------------------------
+COPERNICUS_API_KEY = os.getenv('COPERNICUS_API_KEY', '')
+OVERPASS_ENDPOINT = os.getenv('OVERPASS_ENDPOINT', 'https://overpass-api.de/api/interpreter')

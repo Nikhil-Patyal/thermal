@@ -1,0 +1,16 @@
+WEIGHTS = {
+    'extreme_heat': {'weight': 2.0},
+    'high_heat': {'weight': 1.0},
+    'nighttime': {'weight': 1.0},
+    'daytime': {'weight': 0.5},
+    'expanding_cluster': {'weight': 1.5},
+    'isolated': {'weight': 0.5},
+    'temp': {'weight': 1.0},
+    'humidity': {'weight': 1.0},
+    'wind': {'weight': 1.0},
+    'population': {'weight': 1.0},
+    'gdp': {'weight': 1.0},
+    'forest_fraction': {'weight': 2.0},
+    'cropland_fraction': {'weight': 2.0},
+    'industrial_count': {'weight': 1.5},
+}

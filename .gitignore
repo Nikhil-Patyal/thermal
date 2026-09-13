@@ -16,3 +16,5 @@ __pycache__/
 .DS_Store
 .python/
 catboost_info/
+backend/db.sqlite3
+data/raw/*.csv

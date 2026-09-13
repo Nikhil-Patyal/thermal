@@ -234,27 +234,7 @@ const Spinner = styled.div`
   animation: ${spin} 1s linear infinite;
 `;
 
-const ShapRow = ({ name, val, max }: { name: string, val: number | null, max: number }) => {
-  const safeVal = typeof val === 'number' ? val : 0;
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.75rem', marginBottom: 6 }}>
-      <div style={{ width: 100, color: '#94a3b8', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {name}
-      </div>
-      <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', height: 16, borderRadius: 8, position: 'relative', overflow: 'hidden' }}>
-        <div style={{ 
-          position: 'absolute', top: 0, left: safeVal < 0 ? 'auto' : 0, right: safeVal < 0 ? 0 : 'auto', 
-          height: '100%', 
-          width: `${Math.abs(safeVal) / max * 100}%`,
-          background: safeVal < 0 ? theme.colors.primary : theme.colors.danger 
-        }} />
-      </div>
-      <div style={{ width: 40, color: safeVal < 0 ? theme.colors.primary : theme.colors.danger, fontWeight: 600 }}>
-        {safeVal > 0 ? '+' : ''}{safeVal.toFixed(2)}
-      </div>
-    </div>
-  );
-};
+// Removed ShapRow as it's no longer used
 
 const getClassColor = (cls: string | null) => {
   if (!cls) return '#facc15';
@@ -324,10 +304,7 @@ export const HotspotModal = ({ hotspotId, onClose }: { hotspotId: number | null,
     ? imagePath.startsWith('http') ? imagePath : `${BACKEND}${imagePath}`
     : null;
 
-  const shapEntries = (data?.shap_values && typeof data.shap_values === 'object')
-    ? (Object.entries(data.shap_values) as [string, number | null][]).sort(([, a], [, b]) => Math.abs(b || 0) - Math.abs(a || 0))
-    : [];
-  const shapMax = shapEntries.length ? Math.max(...shapEntries.map(([, v]) => Math.abs(v || 0)), 1) : 1;
+  const evidenceList: string[] = data?.shap_values?.evidence || [];
   const aqiColor = aq?.aqi != null ? (aq.aqi > 150 ? '#ef4444' : aq.aqi > 100 ? '#facc15' : '#4ade80') : '#e2e8f0';
 
   return (
@@ -379,9 +356,9 @@ export const HotspotModal = ({ hotspotId, onClose }: { hotspotId: number | null,
                 </Card>
                 <Card>
                   <CardIcon><ShieldAlert size={14} /></CardIcon>
-                  <CardLabel>ML Confidence</CardLabel>
+                  <CardLabel>Rule Confidence</CardLabel>
                   {dataLoading ? <Skeleton /> : <CardValue $color="#4ade80">{confPct ?? '—'}</CardValue>}
-                  <CardSub>Ensemble classifier</CardSub>
+                  <CardSub>Strict Evidence Engine</CardSub>
                 </Card>
                 <Card>
                   <CardIcon><Activity size={14} /></CardIcon>
@@ -393,50 +370,9 @@ export const HotspotModal = ({ hotspotId, onClose }: { hotspotId: number | null,
                   <CardIcon><Users size={14} /></CardIcon>
                   <CardLabel>Population Exposed</CardLabel>
                   {dataLoading ? <Skeleton /> : <CardValue>{fmtLarge(pe?.population_count) ?? '—'}</CardValue>}
-                  <CardSub>FRP radius estimate ⊕</CardSub>
-                </Card>
-                <Card>
-                  <CardIcon><ShieldAlert size={14} /></CardIcon>
-                  <CardLabel>Safe Evacuation Zone</CardLabel>
-                  {dataLoading ? <Skeleton /> : <CardValue>{fmt(sr?.distance_km, ' km') ?? '—'}</CardValue>}
-                  <CardSub>{sr?.travel_time_min != null ? `~${sr.travel_time_min} min drive` : 'FRP-based estimate ⊕'}</CardSub>
-                </Card>
-                <Card>
-                  <CardIcon><DollarSign size={14} /></CardIcon>
-                  <CardLabel>GDP Exposure</CardLabel>
-                  {dataLoading
-                    ? <Skeleton />
-                    : <CardValue>
-                        {ee?.gdp != null
-                          ? ee.gdp > 1e12
-                            ? `$${(ee.gdp / 1e12).toFixed(1)}T`
-                            : ee.gdp > 1e9
-                              ? `$${(ee.gdp / 1e9).toFixed(1)}B`
-                              : `$${(ee.gdp / 1e6).toFixed(1)}M`
-                          : '—'}
-                      </CardValue>
-                  }
-                  <CardSub>World Bank data ⊕</CardSub>
-                </Card>
-                <Card>
-                  <CardIcon><DollarSign size={14} /></CardIcon>
-                  <CardLabel>Industrial Output</CardLabel>
-                  {dataLoading
-                    ? <Skeleton />
-                    : <CardValue>
-                        {ee?.industrial_output != null
-                          ? ee.industrial_output > 1e9
-                            ? `$${(ee.industrial_output / 1e9).toFixed(2)}B`
-                            : `$${(ee.industrial_output / 1e6).toFixed(1)}M`
-                          : '—'}
-                      </CardValue>
-                  }
-                  <CardSub>Hotspot footprint ⊕</CardSub>
+                  <CardSub>Spatial Query</CardSub>
                 </Card>
               </Grid>
-              <div style={{ fontSize: '0.65rem', color: '#334155', marginTop: 8 }}>
-                ⊕ Derived estimate — not raw census/survey data
-              </div>
             </Section>
 
             {/* ── Live weather ── */}
@@ -589,20 +525,23 @@ export const HotspotModal = ({ hotspotId, onClose }: { hotspotId: number | null,
               </Section>
             )}
 
-            {/* ── SHAP Explanation ── */}
-            {(shapEntries.length > 0 || !dataLoading) && (
+            {/* ── Classification Evidence ── */}
+            {(evidenceList.length > 0 || !dataLoading) && (
               <Section>
-                <SectionLabel>SHAP Feature Importance</SectionLabel>
+                <SectionLabel>Classification Evidence</SectionLabel>
                 {dataLoading
                   ? [1, 2, 3].map(i => <Skeleton key={i} style={{ marginBottom: 10, height: 8 }} />)
-                  : shapEntries.length > 0
-                    ? shapEntries.slice(0, 8).map(([k, v]) => (
-                        <ShapRow key={k} name={k} val={v} max={shapMax} />
-                      ))
+                  : evidenceList.length > 0
+                    ? (
+                      <ul style={{ margin: 0, paddingLeft: 20, fontSize: '0.82rem', color: '#cbd5e1' }}>
+                        {evidenceList.map((ev, i) => (
+                          <li key={i} style={{ marginBottom: 6 }}>{ev}</li>
+                        ))}
+                      </ul>
+                    )
                     : (
                       <div style={{ fontSize: '0.82rem', color: '#475569' }}>
-                        SHAP values not yet computed for this hotspot.
-                        {confPct && ` Ensemble confidence: ${confPct}`}
+                        No geographic evidence rules matched. Classification defaulted to Unknown.
                       </div>
                     )
                 }

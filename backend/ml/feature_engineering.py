@@ -60,11 +60,6 @@ class FeatureExtractor:
                 'humidity': float(humidity) if pd.notna(humidity) else np.nan,
                 'pop_count': float(pop_count) if pd.notna(pop_count) else np.nan,
                 'gdp': float(gdp) if pd.notna(gdp) else np.nan,
-                # Sentinel placeholders for strict missing data policy
-                'ndvi': np.nan,
-                'nbr': np.nan,
-                'forest_cover': np.nan,
-                'infrastructure_dist': np.nan,
             })
             
         df = pd.DataFrame(records)

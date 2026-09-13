@@ -165,8 +165,8 @@ def enrich_hotspot_data(hotspot_id):
         print(f"World Bank API Error: {e}")
 
     eco, _ = EconomicExposure.objects.get_or_create(
-        gdp=gdp_val,
-        industrial_output=gdp_val * 0.25  # Rough estimate based on GDP
+        gdp=gdp_val if gdp_val > 0 else None,
+        industrial_output=None
     )
     hotspot.economic_exposure = eco
 
@@ -226,37 +226,13 @@ def enrich_hotspot_data(hotspot_id):
     weather, _ = Weather.objects.get_or_create(temperature_c=temp_c or 0, wind_speed_ms=wind_ms or 0, humidity=hum or 0)
     hotspot.weather = weather
 
-    # 5. Population Exposure (REAL WorldPop estimation via Open-Meteo Elevation/Pop as proxy if WorldPop fails)
-    # Using Open-Meteo public API for population density approximation
-    pop_count = 0
-    try:
-        pop_url = f"https://api.open-meteo.com/v1/elevation?latitude={lat}&longitude={lng}"
-        # Some endpoints require complex raster queries, we simplify for sprint
-        pop_res = requests.get(pop_url, timeout=5)
-        if pop_res.status_code == 200:
-            # Simulated translation of real geography into population density
-            pop_count = int(pop_res.json().get('elevation', [0])[0] * 12.5) 
-            if pop_count < 0: pop_count = 500
-    except Exception:
-        pass
-
+    # 5. Population Exposure (Real WorldPop missing, removing Open-Meteo Proxy)
+    pop_count = None
     pop, _ = PopulationExposure.objects.get_or_create(population_count=pop_count)
     hotspot.population_exposure = pop
 
-    # 6. Water Quality (Placeholder for complex DB)
-    # Global water databases usually require downloading static NetCDF files.
-    # We query an open geo-service for nearby water bodies.
-    water_index = 0
-    try:
-        overpass_url = "http://overpass-api.de/api/interpreter"
-        query = f"[out:json];node(around:5000,{lat},{lng})[natural=water];out count;"
-        water_res = requests.get(overpass_url, params={'data': query}, timeout=5)
-        if water_res.status_code == 200:
-            water_count = int(water_res.json().get('elements', [{'tags':{}}])[0].get('tags', {}).get('nodes', 0))
-            water_index = min(water_count * 2.5, 100) # Proxy for vulnerability based on nearby water bodies
-    except Exception:
-        pass
-
+    # 6. Water Quality
+    water_index = None
     water, _ = WaterQuality.objects.get_or_create(contamination_index=water_index)
     hotspot.water_quality = water
 
@@ -268,188 +244,46 @@ def enrich_hotspot_data(hotspot_id):
 @shared_task
 def classify_hotspot(hotspot_id):
     """
-    Run authentic ML models (LightGBM & IsolationForest) for fully enriched hotspot.
+    Run authentic EvidenceEngine rule-based classification for fully enriched hotspot.
+    No uncalibrated ML models or fabricated data.
     """
     try:
         hotspot = Hotspot.objects.get(id=hotspot_id)
     except Hotspot.DoesNotExist:
         return
         
-    import os
-    import joblib
-    import logging
     import pandas as pd
-    import numpy as np
     from ml.feature_engineering import FeatureExtractor
+    from ml.evidence_engine import EvidenceEngine
     
-    # Load Models
-    ml_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'ml')
-    lgb_path = os.path.join(ml_dir, 'lightgbm_model.pkl')
-    iso_path = os.path.join(ml_dir, 'iso_forest.pkl')
-    
-    CLASS_MAP = {
-        0: 'Wildfire',
-        1: 'Industrial Fire / Gas Flare',
-        2: 'Agriculture Burning',
-        3: 'Mining Activity / Persistent',
-        -1: 'Unknown / Uncertain'
-    }
-
-    # Helper: robust fallback classification using geographic context
-    def fallback_classification(features: dict) -> tuple[str, float]:
-        """Return (class_name, confidence) based on aggregated geographic features.
-        The confidence is a normalized score between 0 and 1.
-        """
-        # Aggregate across radii (keys end with 'm')
-        forest_sum = sum(v for k, v in features.items() if k.startswith('forest_fraction') and v is not None)
-        cropland_sum = sum(v for k, v in features.items() if k.startswith('cropland_fraction') and v is not None)
-        builtup_sum = sum(v for k, v in features.items() if k.startswith('builtup_fraction') and v is not None)
-        industrial_sum = sum(v for k, v in features.items() if k.startswith('industrial_count') and v is not None)
-
-        # Simple scoring heuristic
-        scores = {
-            'Wildfire': forest_sum,
-            'Industrial Fire / Gas Flare': industrial_sum,
-            'Agriculture Burning': cropland_sum,
-        }
-        total = sum(scores.values())
-        if total == 0:
-            return ('Unknown / Uncertain', 0.0)
-        # Determine best class
-        best_class, best_score = max(scores.items(), key=lambda item: item[1])
-        confidence = best_score / total
-        # Apply configurable threshold
-        try:
-            threshold = float(os.getenv('FALLBACK_CONFIDENCE_THRESHOLD', '0.4'))
-        except Exception:
-            threshold = 0.4
-        if confidence >= threshold:
-            return (best_class, confidence)
-        else:
-            return ('Unknown / Uncertain', confidence)
-
-        # stray duplicate CLASS_MAP entries removed
-
-    
-    lgb_model = None
-    if os.path.exists(lgb_path):
-        lgb_model = joblib.load(lgb_path)
-        
-    iso_forest = None
-    if os.path.exists(iso_path):
-        iso_forest = joblib.load(iso_path)
-        
-    # Fallback: use simple distance approximation based on lat/lng if needed
-    # For now, retrieve recent hotspots without spatial filtering
-    context = Hotspot.objects.filter(id__in=[hotspot.id]).order_by('-acquisition_date')[:50]
-    
-    if not context:
-        context = [hotspot]
-        
+    context = Hotspot.objects.filter(id__in=[hotspot.id])
     extractor = FeatureExtractor()
-    X_df = extractor.extract_features(context, fit_dbscan=True)
+    X_df = extractor.extract_features(context, fit_dbscan=False)
     
     if hotspot.id not in X_df.index:
         return
         
-    target_features = X_df.loc[[hotspot.id]].drop(columns=['lat', 'lng', 'cluster_id'])
+    engine = EvidenceEngine()
+    results_df = engine.generate_weak_labels(X_df)
     
-    pred_class_name = "Unknown / Uncertain"
-    max_prob = None
-    fallback_used = False
+    if hotspot.id not in results_df.index:
+        return
+        
+    res = results_df.loc[hotspot.id]
     
-    # Impute NaNs strictly with -999 for IsolationForest prediction
-    target_features_imputed = target_features.fillna(-999)
-    anomaly_score = None
-    if iso_forest:
-        anomaly_score = float(iso_forest.score_samples(target_features_imputed)[0])
-        
-    if lgb_model:
-        pred_class_idx = lgb_model.predict(target_features)[0]
-        pred_probs = lgb_model.predict_proba(target_features)[0]
-        max_prob = max(pred_probs)
-        pred_class_name = CLASS_MAP.get(pred_class_idx, "Unknown / Uncertain")
-    # If models missing or prediction unknown, use fallback
-    if (lgb_model is None) or (pred_class_name == "Unknown / Uncertain"):
-        # Prepare flat feature dict for fallback (use the first row of target_features)
-        geo_features = target_features.iloc[0].to_dict()
-        fallback_name, fallback_conf = fallback_classification(geo_features)
-        if fallback_name != "Unknown / Uncertain":
-            pred_class_name = fallback_name
-            max_prob = fallback_conf
-            fallback_used = True
-
+    hotspot.predicted_class = res['label']
+    hotspot.confidence_score = float(res['label_confidence']) if pd.notna(res['label_confidence']) else 0.0
     
-    # If model returns Unknown, attempt evidence‑based fallback using geographic features
-    if pred_class_name == "Unknown / Uncertain":
-        # Simple weighted evidence (non‑hard‑rule) – higher score means more confidence
-        geo = target_features.iloc[0]
-        evidence_score = 0.0
-        # Forest evidence for wildfires
-        if geo.get('forest_fraction_250m', 0) > 0.5:
-            evidence_score += 0.3
-        if geo.get('cropland_fraction_250m', 0) > 0.4:
-            evidence_score += 0.2
-        if geo.get('industrial_count_1km', 0) > 0:
-            evidence_score += 0.25
-        # Choose class based on highest weighted evidence
-        if evidence_score >= 0.4:
-            # Prefer wildfires if forest dominant, otherwise industrial fire
-            if geo.get('forest_fraction_250m', 0) > geo.get('industrial_count_1km', 0):
-                pred_class_name = "Wildfire"
-            else:
-                pred_class_name = "Industrial Fire / Gas Flare"
-        else:
-            pred_class_name = "Unknown / Uncertain"
-    
-    hotspot.predicted_class = pred_class_name
-    hotspot.confidence_score = float(max_prob) if max_prob else 0.0
-    
-    def safe_float(val):
-        return float(val) if pd.notna(val) else None
-        
-    evidence = {
-        "frp": safe_float(target_features['frp'].values[0]),
-        "brightness": safe_float(target_features['brightness'].values[0]),
-        "population_density": safe_float(target_features['pop_count'].values[0]),
-        "gdp": safe_float(target_features['gdp'].values[0]),
-        "cluster_density": int(target_features['cluster_density'].values[0]) if pd.notna(target_features['cluster_density'].values[0]) else None,
-        "anomaly_score": round(anomaly_score, 4) if anomaly_score else None,
-        "fallback_used": fallback_used,
-    }
-    
-    data_sources = ["NASA FIRMS"]
-    missing_sources = []
-    
-    if hasattr(hotspot, 'weather') and hotspot.weather:
-        data_sources.append("Open-Meteo")
-    else:
-        missing_sources.append("Open-Meteo Weather")
-        
-    if hasattr(hotspot, 'population_exposure') and hotspot.population_exposure:
-        data_sources.append("Open-Meteo Proxy")
-    else:
-        missing_sources.append("WorldPop/Proxy")
-        
-    missing_sources.extend(["Sentinel-2 NDVI", "Infrastructure GIS", "Sentinel-1 SAR"])
-        
-    if hasattr(hotspot, 'economic_exposure') and hotspot.economic_exposure:
-        data_sources.append("World Bank")
-    else:
-        missing_sources.append("World Bank")
-        
-    features_used = [k for k, v in evidence.items() if v is not None]
-        
     output_payload = {
-        "class": pred_class_name,
-        "probability": round(float(max_prob), 4) if max_prob else None,
-        "confidence": round(float(max_prob), 4) if max_prob else None,
-        "evidence": evidence,
-        "features_used": features_used,
-        "data_sources": data_sources,
-        "missing_sources": missing_sources
+        "class": res['label'],
+        "probability": float(res['label_confidence']) if pd.notna(res['label_confidence']) else None,
+        "confidence": float(res['label_confidence']) if pd.notna(res['label_confidence']) else None,
+        "evidence": res.get('label_evidence', []),
+        "features_used": [], # Obsolete field, kept for UI compatibility
+        "data_sources": res.get('label_sources', []),
+        "missing_sources": res.get('missing_sources', [])
     }
     
     hotspot.shap_values = output_payload
     hotspot.save()
-    print(f"✅ Successfully ran real ML inference for {hotspot_id}")
+    print(f"✅ Successfully ran rule-based inference for {hotspot_id}")

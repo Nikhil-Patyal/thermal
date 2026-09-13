@@ -157,14 +157,29 @@ class EvidenceEngine:
             # Competing strong signals
             competing_scores = [s for s in scores.values() if s >= 1.0]
             
-            if best_score < 1.0:
-                label = 'Other / uncertain thermal anomaly'
-                confidence_str = "Low"
-                evidence.append("Insufficient evidence to classify.")
-            elif len(competing_scores) > 1 and (sorted(competing_scores)[-1] - sorted(competing_scores)[-2] < 0.6):
-                label = 'Other / uncertain thermal anomaly'
-                confidence_str = "Low"
-                evidence.append("Conflicting evidence: mixed geographic context without a dominant class.")
+            if best_score < 1.0 or (len(competing_scores) > 1 and (sorted(competing_scores)[-1] - sorted(competing_scores)[-2] < 0.6)):
+                # Handle uncertain or conflicting evidence using physical fallback features
+                daynight = row.get('daynight')
+                if pd.notna(frp) and frp < 15 and daynight == 'D':
+                    label = 'Likely small agricultural burning (low confidence)'
+                    confidence_str = "Low"
+                    evidence.append("Geographic context missing, but daytime low FRP suggests agriculture.")
+                elif pd.notna(frp) and frp > 100:
+                    label = 'Likely wildland vegetation fire (low confidence)'
+                    confidence_str = "Low"
+                    evidence.append("Geographic context missing, but high FRP suggests wildfire.")
+                elif daynight == 'N':
+                    label = 'Unknown nighttime thermal anomaly'
+                    confidence_str = "Low"
+                    evidence.append("Geographic context missing. Nighttime occurrence.")
+                elif daynight == 'D':
+                    label = 'Unknown daytime thermal anomaly'
+                    confidence_str = "Low"
+                    evidence.append("Geographic context missing. Daytime occurrence.")
+                else:
+                    label = 'Other classification'
+                    confidence_str = "Low"
+                    evidence.append("Insufficient or conflicting evidence to classify.")
             else:
                 label = best_class
                 confidence_str = "Strong" if best_score >= 1.5 else "Moderate"

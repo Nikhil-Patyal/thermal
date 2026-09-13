@@ -52,6 +52,7 @@ def run():
             'track': h.track,
             'frp': h.frp,
             'brightness': h.brightness,
+            'daynight': h.daynight,
             'forest_fraction_1000m': h.features.get('forest_fraction_1000m') if h.features else None,
             'cropland_fraction_1000m': h.features.get('cropland_fraction_1000m') if h.features else None,
             'industrial_count_1000m': h.features.get('industrial_count_1000m') if h.features else None,

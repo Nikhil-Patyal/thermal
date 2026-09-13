@@ -79,9 +79,37 @@ def fetch_live_firms_data():
         try:
             lat = float(row['latitude'])
             lng = float(row['longitude'])
-            frp = float(row.get('frp') or 0)
-            brightness = float(row.get('brightness') or 0)
+            
+            # Support missing FRP safely
+            frp = row.get('frp')
+            frp = float(frp) if frp else None
+            
+            # Brightness bands
+            brightness = row.get('brightness')
+            brightness = float(brightness) if brightness else None
+            
+            bright_ti4 = row.get('bright_ti4')
+            bright_ti4 = float(bright_ti4) if bright_ti4 else None
+            
+            bright_ti5 = row.get('bright_ti5')
+            bright_ti5 = float(bright_ti5) if bright_ti5 else None
+            
+            bright_t31 = row.get('bright_t31')
+            bright_t31 = float(bright_t31) if bright_t31 else None
+            
+            # Scan/Track
             scan = row.get('scan')
+            scan = float(scan) if scan else None
+            
+            track = row.get('track')
+            track = float(track) if track else None
+            
+            # Instrument / metadata
+            instrument = row.get('instrument')
+            satellite = row.get('satellite')
+            daynight = row.get('daynight')
+            version = row.get('version')
+            
             conf_val = row.get('confidence', '')
             if isinstance(conf_val, str) and conf_val.isalpha():
                 if conf_val.lower() == 'l':
@@ -110,7 +138,15 @@ def fetch_live_firms_data():
                 location=Point(lng, lat, srid=4326),
                 frp=frp,
                 brightness=brightness,
+                bright_ti4=bright_ti4,
+                bright_ti5=bright_ti5,
+                bright_t31=bright_t31,
                 scan=scan,
+                track=track,
+                instrument=instrument,
+                satellite=satellite,
+                daynight=daynight,
+                version=version,
                 confidence=confidence,
                 acquisition_date=acquisition_dt,
             ))

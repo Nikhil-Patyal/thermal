@@ -2,15 +2,9 @@ import pandas as pd
 import numpy as np
 from sklearn.cluster import DBSCAN
 from hotspots.models import Hotspot
+from geography.services import GeographyService
 
 class FeatureExtractor:
-    """
-    Extracts strictly real features from Django ORM Hotspot models 
-    into a Pandas DataFrame for ML training and prediction.
-    """
-    # Import the new geography service
-    from geography.services import GeographyService
-    
     def extract_features(self, hotspots_queryset, fit_dbscan=False):
         """
         Converts a Django queryset of Hotspots into a DataFrame of numerical features.
@@ -82,6 +76,8 @@ class FeatureExtractor:
             try:
                 geo = GeographyService.extract_context_features(lat, lng)
             except Exception as e:
+                import traceback
+                traceback.print_exc()
                 # On any failure we fall back to empty dict; the service itself
                 # records source availability flags.
                 geo = {}

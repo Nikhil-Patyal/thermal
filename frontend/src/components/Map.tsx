@@ -14,15 +14,17 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-// Class-based color mapping for ML predictions
-const getClassColor = (predictedClass: string, _frp?: number) => {
-  if (!predictedClass) return '#facc15';
+const getClassColor = (predictedClass: string, status?: string) => {
+  if (!predictedClass) return '#475569'; // Grey for Pending/Unknown
   const cls = predictedClass.toLowerCase();
-  if (cls.includes('wildfire') || cls.includes('forest')) return '#ef4444'; // Red
-  if (cls.includes('crop') || cls.includes('agricultural')) return '#f97316'; // Orange
-  if (cls.includes('industrial') || cls.includes('flare')) return '#a855f7';  // Purple / Industrial
-  if (cls.includes('mining') || cls.includes('smelter')) return '#06b6d4';   // Cyan
-  return '#eab308'; // Amber
+  if (cls.includes('wildland') || cls.includes('forest')) return '#ef4444'; // Red
+  if (cls.includes('agri') || cls.includes('crop')) return '#f97316'; // Orange
+  if (cls.includes('industrial') || cls.includes('flare')) {
+    if (status && status.toLowerCase().includes('suspected')) return '#e11d48'; // Bright Red/Rose for Incident
+    return '#a855f7';  // Purple / Routine Industrial
+  }
+  if (cls.includes('other') || cls.includes('uncertain')) return '#475569';   // Grey
+  return '#facc15'; // Default Yellow
 };
 
 const Legend = styled.div`
@@ -117,8 +119,9 @@ export const MapComponent: React.FC<MapComponentProps> = ({ onHotspotClick, onDa
     const fetchHotspots = async () => {
       try {
         const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-        // map-points returns ALL records with only the 5 fields needed for markers
-        const response = await fetch(`${backendUrl}/api/hotspots/map-points/`);
+        // Add cache-busting timestamp to prevent browser from serving stale map data
+        const timestamp = new Date().getTime();
+        const response = await fetch(`${backendUrl}/api/hotspots/map-points/?t=${timestamp}`, { cache: 'no-store' });
         const data = await response.json();
 
         const transformed = data
@@ -130,10 +133,20 @@ export const MapComponent: React.FC<MapComponentProps> = ({ onHotspotClick, onDa
             id: h.id,
             lat: h.lat,
             lng: h.lng,
-            predicted_class: h.predicted_class || 'Thermal Anomaly',
+            predicted_class: h.source_type || h.predicted_class || 'Other / uncertain thermal anomaly',
+            industrial_status: h.industrial_anomaly_status,
             frp: h.frp,
             confidence_score: h.confidence_score,
           }));
+
+        // Z-Index Fix: Render Unknown hotspots first, so classified hotspots render on top of them
+        transformed.sort((a: any, b: any) => {
+          const aUnknown = !a.predicted_class || a.predicted_class.includes('uncertain') || a.predicted_class.includes('Unknown');
+          const bUnknown = !b.predicted_class || b.predicted_class.includes('uncertain') || b.predicted_class.includes('Unknown');
+          if (aUnknown && !bUnknown) return -1;
+          if (!aUnknown && bUnknown) return 1;
+          return 0;
+        });
 
         setHotspots(transformed);
         if (onDataLoaded) {
@@ -151,12 +164,13 @@ export const MapComponent: React.FC<MapComponentProps> = ({ onHotspotClick, onDa
       <MapContainer ref={mapRef} 
         center={[20.5937, 78.9629]} 
         zoom={zoomLevel} 
-        minZoom={2.5}
+        minZoom={4}
         maxZoom={18}
         preferCanvas={true}
         scrollWheelZoom={true}
-        maxBounds={[[-85, -180], [85, 180]]}
+        maxBounds={[[6.0, 68.0], [38.0, 98.0]]}
         maxBoundsViscosity={1.0}
+        style={{ height: '100%', width: '100%' }}
         worldCopyJump={false}
       >
         <LayersControl position="topright">
@@ -197,17 +211,19 @@ export const MapComponent: React.FC<MapComponentProps> = ({ onHotspotClick, onDa
         </LayersControl>
 
         {hotspots.map((h) => {
-          const markerColor = getClassColor(h.predicted_class, h.frp);
+          const markerColor = getClassColor(h.predicted_class, h.industrial_status);
+          const isUnknown = markerColor === '#475569';
           return (
             <CircleMarker
               key={h.id}
               center={[h.lat, h.lng]}
-              radius={h.frp > 50 ? 6 : 4}
+              radius={isUnknown ? 4 : (h.frp > 50 ? 7 : 5)}
               pathOptions={{
-                color: '#ffffff',
-                weight: 0.8,
-                fillColor: markerColor,
-                fillOpacity: 0.85,
+                color: isUnknown ? '#94a3b8' : '#ffffff',
+                weight: isUnknown ? 1.5 : 1.2,
+                fillColor: isUnknown ? 'transparent' : markerColor,
+                fillOpacity: isUnknown ? 0 : 1.0,
+                dashArray: isUnknown ? '2, 4' : undefined,
               }}
               eventHandlers={{
                 click: () => {
@@ -218,9 +234,25 @@ export const MapComponent: React.FC<MapComponentProps> = ({ onHotspotClick, onDa
             >
               <Popup>
                 <div style={{ padding: '6px' }}>
-                  <strong style={{ color: markerColor }}>{h.predicted_class}</strong>
-                  <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>FRP: {h.frp} MW</div>
-                  <div style={{ fontSize: '0.8rem' }}>Confidence: {h.confidence_score ? `${(h.confidence_score * 100).toFixed(1)}%` : `${h.confidence}%`}</div>
+                  <strong style={{ color: isUnknown ? '#94a3b8' : markerColor }}>
+                    {h.predicted_class}
+                  </strong>
+                  <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>
+                    FRP: {h.frp} MW
+                  </div>
+                  <div style={{ fontSize: '0.8rem' }}>
+                    Evidence Strength: {h.confidence_score ? h.confidence_score : 'Low'}
+                  </div>
+                  {isUnknown && (
+                    <div style={{ fontSize: '0.75rem', marginTop: '4px', color: '#facc15' }}>
+                      ⚠ Insufficient evidence — not source-confirmed
+                    </div>
+                  )}
+                  {!isUnknown && (
+                    <div style={{ fontSize: '0.75rem', marginTop: '4px', color: '#cbd5e1' }}>
+                      Supported by Evidence (Not Independently Verified)
+                    </div>
+                  )}
                   <button onClick={() => onHotspotClick(h.id)} style={{ fontSize: '0.75rem', marginTop: '6px', color: '#38bdf8', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}>
                     Click to view detailed dossier &rarr;
                   </button>
@@ -248,6 +280,10 @@ export const MapComponent: React.FC<MapComponentProps> = ({ onHotspotClick, onDa
         <div className="legend-item">
           <span className="legend-dot" style={{ background: '#f97316' }} />
           <span>Crop Residue / Agricultural</span>
+        </div>
+        <div className="legend-item">
+          <span className="legend-dot" style={{ background: '#475569', opacity: 0.5 }} />
+          <span>Unclassified / API Rate Limited</span>
         </div>
       </Legend>
     </MapWrapper>

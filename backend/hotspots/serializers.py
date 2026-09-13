@@ -2,8 +2,22 @@ from rest_framework import serializers
 from .models import EnrichmentStatus, EvidenceRecord
 from .models import (
     Hotspot, EconomicExposure, AirQuality, SafeRoute, 
-    Weather, PopulationExposure, WaterQuality
+    Weather, PopulationExposure, WaterQuality, FacilityCandidate
 )
+
+class FacilityCandidateSerializer(serializers.ModelSerializer):
+    lat = serializers.SerializerMethodField()
+    lng = serializers.SerializerMethodField()
+
+    def get_lat(self, obj):
+        return obj.geometry.y if obj.geometry else None
+
+    def get_lng(self, obj):
+        return obj.geometry.x if obj.geometry else None
+
+    class Meta:
+        model = FacilityCandidate
+        fields = ['id', 'name', 'category', 'lat', 'lng']
 
 class EconomicExposureSerializer(serializers.ModelSerializer):
     class Meta:

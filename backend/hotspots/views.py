@@ -189,19 +189,39 @@ class HotspotViewSet(viewsets.ReadOnlyModelViewSet):
     def map_points(self, request):
         """
         Ultra-lightweight endpoint returning only the fields needed for map markers.
-        Returns ALL hotspots (~39k) with minimal payload (~3 MB vs 18 MB full).
-        Fields: id, lat, lng, frp, predicted_class, confidence_score
+        Strictly limited to India bounds to prevent global records from appearing.
+        Fields: id, lat, lng, frp, predicted_class, source_type, processing_status, industrial_anomaly_status, confidence_score
         """
         limit = int(request.query_params.get('limit', 10000))
-        # Use ORM to fetch latitude and longitude fields for map markers, order by most intense fires first
-        queryset = Hotspot.objects.filter(latitude__isnull=False, longitude__isnull=False).order_by('-frp')[:limit]
-        # Select required fields and rename latitude/longitude to lat/lng for frontend compatibility
-        data = list(queryset.values('id', 'latitude', 'longitude', 'frp', 'predicted_class', 'confidence_score'))
-        # Rename keys to match expected output
-        for item in data:
+        
+        from .models import IndiaBoundary
+        boundary = IndiaBoundary.objects.first()
+        
+        # 1. Preliminary bounding box filter for speed
+        india_qs = Hotspot.objects.filter(
+            latitude__gte=6, latitude__lte=38,
+            longitude__gte=68, longitude__lte=98,
+            latitude__isnull=False, longitude__isnull=False
+        )
+        
+        # 2. Strict spatial predicate (point-in-polygon)
+        if boundary and boundary.geometry:
+            india_qs = india_qs.filter(location__intersects=boundary.geometry)
+            
+        india_qs = india_qs.order_by('-frp')[:limit]
+        
+        # Select required fields
+        fields = ['id', 'latitude', 'longitude', 'frp', 'predicted_class', 'source_type', 'processing_status', 'industrial_anomaly_status', 'confidence_score']
+        india_data = list(india_qs.values(*fields))
+        
+        combined_data = []
+        for item in india_data:
+            # Rename keys to match expected output
             item['lat'] = item.pop('latitude')
             item['lng'] = item.pop('longitude')
-        return Response(data)
+            combined_data.append(item)
+                
+        return Response(combined_data)
 
     @action(detail=True, methods=['get'])
     def predict(self, request, pk=None):
@@ -213,3 +233,12 @@ class HotspotViewSet(viewsets.ReadOnlyModelViewSet):
             'confidence_score': hotspot.confidence_score,
             'shap_values': hotspot.shap_values
         })
+
+    @action(detail=False, methods=['get'])
+    def facilities(self, request):
+        """Return all industrial facilities (max 10000) for map rendering."""
+        from .models import FacilityCandidate
+        from .serializers import FacilityCandidateSerializer
+        facilities = FacilityCandidate.objects.filter(geometry__isnull=False)[:10000]
+        serializer = FacilityCandidateSerializer(facilities, many=True)
+        return Response(serializer.data)

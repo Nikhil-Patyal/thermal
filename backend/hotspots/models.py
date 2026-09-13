@@ -44,10 +44,18 @@ class WaterQuality(models.Model):
     def __str__(self):
         return f"WaterQuality(index={self.contamination_index})"
 
+class IndiaBoundary(models.Model):
+    name = models.CharField(max_length=100, default='India')
+    geometry = gis_models.MultiPolygonField(srid=4326)
+    source = models.CharField(max_length=255, null=True, blank=True)
+    
+    def __str__(self):
+        return self.name
+
 class FacilityCandidate(models.Model):
     name = models.CharField(max_length=255, null=True, blank=True)
     category = models.CharField(max_length=100, null=True, blank=True)
-    geometry = gis_models.PointField(srid=4326, null=True, blank=True)
+    geometry = gis_models.GeometryField(srid=4326, null=True, blank=True)
     distance_km = models.FloatField(null=True, blank=True)
 
     def __str__(self):
@@ -72,9 +80,24 @@ class ModelVersion(models.Model):
 class Hotspot(gis_models.Model):
     # FIRMS fields
     frp = models.FloatField(null=True, blank=True)
-    scan = models.CharField(max_length=20, null=True, blank=True)
+    scan = models.FloatField(null=True, blank=True)
+    track = models.FloatField(null=True, blank=True)
     confidence = models.IntegerField(null=True, blank=True)
+    
+    # Generic brightness (used loosely by old logic, kept for backward compat)
     brightness = models.FloatField(null=True, blank=True)
+    
+    # Specific brightness bands
+    bright_ti4 = models.FloatField(null=True, blank=True)
+    bright_ti5 = models.FloatField(null=True, blank=True)
+    bright_t31 = models.FloatField(null=True, blank=True)
+    
+    # Sensor metadata
+    instrument = models.CharField(max_length=50, null=True, blank=True)
+    satellite = models.CharField(max_length=50, null=True, blank=True)
+    daynight = models.CharField(max_length=10, null=True, blank=True)
+    version = models.CharField(max_length=50, null=True, blank=True)
+    
     acquisition_date = models.DateTimeField(null=True, blank=True)
     
     # Geometry
@@ -96,14 +119,25 @@ class Hotspot(gis_models.Model):
     model_version = models.ForeignKey(ModelVersion, on_delete=models.SET_NULL, null=True, blank=True)
     
     # Classification fields
-    predicted_class = models.CharField(max_length=50, null=True, blank=True)
-    confidence_score = models.FloatField(null=True, blank=True)  # 0‑1
+    predicted_class = models.CharField(max_length=50, null=True, blank=True)  # Legacy combined field
+    confidence_score = models.CharField(max_length=20, null=True, blank=True)  # Low/Moderate/Strong
     shap_values = models.JSONField(null=True, blank=True)  # store SHAP explanation
+    
+    # Normalized classification fields
+    PROCESSING_CHOICES = [
+        ('PENDING', 'Pending enrichment'),
+        ('PARTIAL', 'Partial evidence'),
+        ('COMPLETED', 'Completed'),
+        ('FAILED', 'Failed processing')
+    ]
+    processing_status = models.CharField(max_length=20, choices=PROCESSING_CHOICES, default='PENDING')
+    source_type = models.CharField(max_length=100, null=True, blank=True)
+    industrial_anomaly_status = models.CharField(max_length=100, null=True, blank=True)
     
     # Evidence Engine & Label Provenance (Weak Labels)
     label = models.CharField(max_length=50, null=True, blank=True)
     label_type = models.CharField(max_length=20, null=True, blank=True) # e.g. "weak", "ground_truth"
-    label_confidence = models.FloatField(null=True, blank=True)
+    label_confidence = models.CharField(max_length=20, null=True, blank=True)
     label_evidence = models.JSONField(null=True, blank=True) # List of evidence strings
     label_sources = models.JSONField(null=True, blank=True) # List of sources
     missing_sources = models.JSONField(null=True, blank=True) # List of missing source names

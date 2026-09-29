@@ -11,6 +11,9 @@ SECRET_KEY = 'django-insecure-dummy-key-for-agni-drishti'
 
 DEBUG = True
 
+GDAL_LIBRARY_PATH = '/Users/nikhilpatyal/miniforge3/lib/libgdal.dylib'
+GEOS_LIBRARY_PATH = '/Users/nikhilpatyal/miniforge3/lib/libgeos_c.dylib'
+
 ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
@@ -62,16 +65,30 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.contrib.gis.db.backends.postgis',
-        'NAME': os.getenv('POSTGRES_DB', 'agni_drishti'),
-        'USER': os.getenv('POSTGRES_USER', 'agni_user'),
-        'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'agni_password'),
-        'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
-        'PORT': os.getenv('POSTGRES_PORT', '5432'),
+USE_SQLITE = os.getenv('USE_SQLITE', 'false').lower() == 'true'
+
+if USE_SQLITE:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.contrib.gis.db.backends.spatialite',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
+    SPATIALITE_LIBRARY_PATH = '/Users/nikhilpatyal/miniforge3/lib/mod_spatialite.dylib'
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.contrib.gis.db.backends.postgis',
+            'NAME': os.getenv('POSTGRES_DB', 'agni_drishti'),
+            'USER': os.getenv('POSTGRES_USER', 'agni_user'),
+            'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'agni_password'),
+            'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
+            'PORT': os.getenv('POSTGRES_PORT', '5432'),
+            'OPTIONS': {
+                'options': '-c max_parallel_workers_per_gather=0'
+            }
+        }
+    }
 
 # Cache – Redis for FIRMS responses
 CACHES = {
@@ -126,3 +143,5 @@ SENTINEL_HUB_DATE_RANGE_DAYS = int(os.getenv('SENTINEL_HUB_DATE_RANGE_DAYS', '18
 # -----------------------------------------------------------
 COPERNICUS_API_KEY = os.getenv('COPERNICUS_API_KEY', '')
 OVERPASS_ENDPOINT = os.getenv('OVERPASS_ENDPOINT', 'https://overpass-api.de/api/interpreter')
+
+WORLDCOVER_RASTER_PATH = os.path.join(BASE_DIR, 'data/worldcover_india.vrt')

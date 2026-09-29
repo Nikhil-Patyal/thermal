@@ -30,14 +30,21 @@ def map_category(tags):
     landuse = tags.get("landuse")
     man_made = tags.get("man_made")
     industrial = tags.get("industrial")
-    if industrial in ["refinery", "oil", "gas"] or tags.get("pipeline") == "flare":
-        return "Refinery / oil and gas / flare"
-    if landuse == "quarry" or tags.get("mine") or tags.get("resource") in ["coal", "metal"]:
+    plant = tags.get("plant")
+    power = tags.get("power")
+    generator = tags.get("generator:source")
+    substance = tags.get("substance")
+    
+    if industrial in ["refinery", "oil", "gas", "petrochemical"] or tags.get("pipeline") == "flare" or substance in ["lng", "oil", "gas"]:
+        return "Oil & Gas / Refinery / LNG"
+    if power == "plant" and generator in ["coal", "gas", "oil"]:
+        return "Thermal Power Plant"
+    if landuse == "quarry" or tags.get("mine") or tags.get("resource") in ["coal", "metal"] or industrial == "mine":
         return "Mine / quarry"
-    if industrial in ["smelter", "metallurgical"] or man_made == "works":
-        return "Smelter / metallurgical facility"
+    if industrial in ["smelter", "metallurgical", "steel"] or man_made == "works":
+        return "Steel / Metallurgical"
     if landuse == "industrial" or man_made == "chimney":
-        return "Other heat-emitting industrial facility"
+        return "Industrial"
     return None
 
 class IndustrialHandler(osmium.SimpleHandler):

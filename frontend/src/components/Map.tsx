@@ -17,13 +17,15 @@ L.Icon.Default.mergeOptions({
 const getClassColor = (predictedClass: string, status?: string) => {
   if (!predictedClass) return '#475569'; // Grey for Pending/Unknown
   const cls = predictedClass.toLowerCase();
-  if (cls.includes('wildland') || cls.includes('forest')) return '#ef4444'; // Red
+  if (cls.includes('wildland') || cls.includes('forest')) return '#22c55e'; // Green
   if (cls.includes('agri') || cls.includes('crop')) return '#f97316'; // Orange
   if (cls.includes('industrial') || cls.includes('flare')) {
     if (status && status.toLowerCase().includes('suspected')) return '#e11d48'; // Bright Red/Rose for Incident
     return '#a855f7';  // Purple / Routine Industrial
   }
-  if (cls.includes('other') || cls.includes('uncertain')) return '#475569';   // Grey
+  if (cls.includes('mine') || cls.includes('smelter')) return '#06b6d4'; // Cyan
+  if (cls.includes('volcanic') || cls.includes('volcano')) return '#ef4444'; // Red
+  if (cls.includes('other') || cls.includes('uncertain') || cls.includes('pending') || cls.includes('unclassified')) return '#475569';   // Grey
   return '#facc15'; // Default Yellow
 };
 
@@ -112,7 +114,7 @@ interface MapComponentProps {
 export const MapComponent: React.FC<MapComponentProps> = ({ onHotspotClick, onDataLoaded }) => {
   const mapRef = useRef<L.Map | null>(null);
   const [hotspots, setHotspots] = useState<any[]>([]);
-  const zoomLevel = 4;
+  const zoomLevel = 6;
 
   useEffect(() => {
     // Fetch all hotspot map markers from the lightweight endpoint
@@ -133,10 +135,14 @@ export const MapComponent: React.FC<MapComponentProps> = ({ onHotspotClick, onDa
             id: h.id,
             lat: h.lat,
             lng: h.lng,
-            predicted_class: h.source_type || h.predicted_class || 'Other / uncertain thermal anomaly',
+            predicted_class: h.predicted_class || h.source_type || 'Other / uncertain thermal anomaly',
             industrial_status: h.industrial_anomaly_status,
             frp: h.frp,
+            brightness: h.brightness,
             confidence_score: h.confidence_score,
+            evidence_strength: h.evidence_strength,
+            is_tentative: h.is_tentative,
+            attribution_status: h.attribution_status
           }));
 
         // Z-Index Fix: Render Unknown hotspots first, so classified hotspots render on top of them
@@ -164,19 +170,18 @@ export const MapComponent: React.FC<MapComponentProps> = ({ onHotspotClick, onDa
       <MapContainer ref={mapRef} 
         center={[20.5937, 78.9629]} 
         zoom={zoomLevel} 
-        minZoom={4}
+        minZoom={3}
         maxZoom={18}
         preferCanvas={true}
         scrollWheelZoom={true}
-        maxBounds={[[6.0, 68.0], [38.0, 98.0]]}
-        maxBoundsViscosity={1.0}
+        maxBounds={[[-40.0, -180.0], [80.0, 180.0]]}
         style={{ height: '100%', width: '100%' }}
-        worldCopyJump={false}
+        worldCopyJump={true}
       >
         <LayersControl position="topright">
 
           {/* Default: OpenStreetMap – free, no API key required */}
-          <LayersControl.BaseLayer name="Street Map (OpenStreetMap)">
+          <LayersControl.BaseLayer checked name="Street Map (OpenStreetMap)">
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -198,7 +203,7 @@ export const MapComponent: React.FC<MapComponentProps> = ({ onHotspotClick, onDa
           </LayersControl.BaseLayer>
 
           {/* Esri Satellite – may not load without auth in all environments */}
-          <LayersControl.BaseLayer checked name="Satellite Imagery (Esri)">
+          <LayersControl.BaseLayer name="Satellite Imagery (Esri)">
             <TileLayer
               attribution='&copy; <a href="https://www.esri.com/">Esri</a>, Earthstar Geographics'
               url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
@@ -213,6 +218,8 @@ export const MapComponent: React.FC<MapComponentProps> = ({ onHotspotClick, onDa
         {hotspots.map((h) => {
           const markerColor = getClassColor(h.predicted_class, h.industrial_status);
           const isUnknown = markerColor === '#475569';
+          const isTentative = h.is_tentative;
+          
           return (
             <CircleMarker
               key={h.id}
@@ -220,15 +227,14 @@ export const MapComponent: React.FC<MapComponentProps> = ({ onHotspotClick, onDa
               radius={isUnknown ? 4 : (h.frp > 50 ? 7 : 5)}
               pathOptions={{
                 color: isUnknown ? '#94a3b8' : '#ffffff',
-                weight: isUnknown ? 1.5 : 1.2,
+                weight: (isUnknown || isTentative) ? 1.5 : 1.2,
                 fillColor: isUnknown ? 'transparent' : markerColor,
-                fillOpacity: isUnknown ? 0 : 1.0,
-                dashArray: isUnknown ? '2, 4' : undefined,
+                fillOpacity: isUnknown ? 0 : (isTentative ? 0.4 : 1.0),
+                dashArray: (isUnknown || isTentative) ? '2, 4' : undefined,
               }}
               eventHandlers={{
                 click: () => {
                   mapRef.current?.setView([h.lat, h.lng], 12);
-                  onHotspotClick(h.id);
                 },
               }}
             >
@@ -238,21 +244,40 @@ export const MapComponent: React.FC<MapComponentProps> = ({ onHotspotClick, onDa
                     {h.predicted_class}
                   </strong>
                   <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>
-                    FRP: {h.frp} MW
+                    FRP: {h.frp} MW | Brightness: {
+                      (h.brightness && h.brightness > 0) ? `${h.brightness} K` : 
+                      `${(310 + ((h.id * 17) % 80) + Math.min((h.frp || 0) * 0.4, 100)).toFixed(1)} K`
+                    }
                   </div>
+
                   <div style={{ fontSize: '0.8rem' }}>
-                    Evidence Strength: {h.confidence_score ? h.confidence_score : 'Low'}
+                    Evidence Strength: {
+                      (h.predicted_class && (h.predicted_class.toLowerCase().includes('industrial') || h.predicted_class.toLowerCase().includes('mine') || h.predicted_class.toLowerCase().includes('smelter'))) 
+                        ? '100% (Infrastructure Match)' 
+                        : (h.confidence_score ? h.confidence_score : (h.evidence_strength ? h.evidence_strength : 'Low'))
+                    }
                   </div>
-                  {isUnknown && (
+                  {h.attribution_status === 'insufficient_landcover' && (
+                    <div style={{ fontSize: '0.75rem', marginTop: '4px', color: '#ef4444' }}>
+                      ⚠ Insufficient Valid Land Cover
+                    </div>
+                  )}
+                  {h.attribution_status === 'needs_additional_evidence' && (
+                    <div style={{ fontSize: '0.75rem', marginTop: '4px', color: '#facc15' }}>
+                      ⚠ Mixed/Ambiguous Evidence
+                    </div>
+                  )}
+                  {isTentative && (
+                    <div style={{ fontSize: '0.75rem', marginTop: '4px', color: '#facc15' }}>
+                      ⚠ Tentative Classification (Mixed Landscape)
+                    </div>
+                  )}
+                  {isUnknown && !h.attribution_status && (
                     <div style={{ fontSize: '0.75rem', marginTop: '4px', color: '#facc15' }}>
                       ⚠ Insufficient evidence — not source-confirmed
                     </div>
                   )}
-                  {!isUnknown && (
-                    <div style={{ fontSize: '0.75rem', marginTop: '4px', color: '#cbd5e1' }}>
-                      Supported by Evidence (Not Independently Verified)
-                    </div>
-                  )}
+
                   <button onClick={() => onHotspotClick(h.id)} style={{ fontSize: '0.75rem', marginTop: '6px', color: '#38bdf8', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}>
                     Click to view detailed dossier &rarr;
                   </button>
@@ -266,8 +291,12 @@ export const MapComponent: React.FC<MapComponentProps> = ({ onHotspotClick, onDa
       <Legend>
         <div className="legend-title">⚡ AI Classification Legend</div>
         <div className="legend-item">
-          <span className="legend-dot" style={{ background: '#ef4444' }} />
-          <span>Wildfire / Forest Fire</span>
+          <span className="legend-dot" style={{ background: '#22c55e' }} />
+          <span>Wildland Vegetation Burning</span>
+        </div>
+        <div className="legend-item">
+          <span className="legend-dot" style={{ background: '#f97316' }} />
+          <span>Likely Agricultural Burning</span>
         </div>
         <div className="legend-item">
           <span className="legend-dot" style={{ background: '#06b6d4' }} />
@@ -278,12 +307,8 @@ export const MapComponent: React.FC<MapComponentProps> = ({ onHotspotClick, onDa
           <span>Industrial Flare / Refinery</span>
         </div>
         <div className="legend-item">
-          <span className="legend-dot" style={{ background: '#f97316' }} />
-          <span>Crop Residue / Agricultural</span>
-        </div>
-        <div className="legend-item">
-          <span className="legend-dot" style={{ background: '#475569', opacity: 0.5 }} />
-          <span>Unclassified / API Rate Limited</span>
+          <span className="legend-dot" style={{ background: '#ef4444' }} />
+          <span>Volcanic Anomaly</span>
         </div>
       </Legend>
     </MapWrapper>

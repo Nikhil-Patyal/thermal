@@ -63,7 +63,7 @@ function App() {
       <Navbar>
         <Brand>
           <Flame color={theme.colors.danger} />
-          AGNI-DRISHTI: NASA FIRMS Intelligence
+          Thermal Sentinel: NASA FIRMS Intelligence
         </Brand>
         <NavActions>
           <StatsBadge>

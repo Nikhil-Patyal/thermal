@@ -153,9 +153,22 @@ class Hotspot(gis_models.Model):
     # Provenance fields
     landcover_source = models.CharField(max_length=100, null=True, blank=True)
     landcover_version = models.CharField(max_length=20, null=True, blank=True)
+    footprint_method = models.CharField(max_length=50, null=True, blank=True)
     osm_query_status = models.CharField(max_length=30, null=True, blank=True)
     weather_status = models.CharField(max_length=30, null=True, blank=True)
     population_status = models.CharField(max_length=30, null=True, blank=True)
+    
+    # Detailed Land Cover Fractions (WorldCover 10m)
+    cropland_fraction = models.FloatField(null=True, blank=True)
+    tree_fraction = models.FloatField(null=True, blank=True)
+    shrub_fraction = models.FloatField(null=True, blank=True)
+    grass_fraction = models.FloatField(null=True, blank=True)
+    other_fraction = models.FloatField(null=True, blank=True)
+    valid_coverage = models.FloatField(null=True, blank=True)
+    
+    attribution_status = models.CharField(max_length=100, null=True, blank=True)
+    evidence_strength = models.CharField(max_length=50, null=True, blank=True)
+    is_tentative = models.BooleanField(default=False)
     
     # Additional fields
     risk_score = models.FloatField(null=True, blank=True)

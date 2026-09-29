@@ -119,7 +119,7 @@ export function IntelligenceMap({
   const getIcon = (type: string) => {
     const icons: { [k: string]: string } = {
       'Wildfire': '🔥', 'Industrial Fire': '🏭', 'Gas Flare': '🛢️',
-      'Agriculture Burning': '🌾', 'Mining Activity': '⛏️',
+      'Agriculture Burning': '🌾', 'Mining Activity': '⛏️', 'Volcanic Anomaly': '🌋',
     };
     return icons[type] || '📍';
   };
@@ -131,7 +131,8 @@ export function IntelligenceMap({
       'Industrial Fire': '#f97316',
       'Gas Flare': '#27c016',
       'Agriculture Burning': '#b0c64d',
-      'Mining Activity': '#2e1e18'
+      'Mining Activity': '#2e1e18',
+      'Volcanic Anomaly': '#ef4444'
     };
     return typeColors[event.type] || '#f97316';
   };

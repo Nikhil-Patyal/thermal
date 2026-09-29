@@ -101,16 +101,20 @@ class HotspotSerializer(serializers.ModelSerializer):
     class Meta:
         model = Hotspot
         fields = [
-            'id', 'frp', 'scan', 'confidence', 'brightness', 'acquisition_date',
+            'id', 'frp', 'scan', 'confidence', 'brightness', 'bright_ti4', 'acquisition_date',
             'lat', 'lng', 'anomaly_score', 'economic_exposure', 'air_quality', 'safe_route',
             'weather', 'population_exposure', 'water_quality',
             'predicted_class', 'confidence_score', 'shap_values', 'fetched_at',
             'label', 'label_type', 'label_confidence', 'label_evidence', 
             'label_sources', 'missing_sources', 'features',
             # New evidence fields
-            'enrichment_status', 'evidence_record', 'source_context', 'thermal_behaviour',
-            'industrial_subtype', 'decision_status', 'landcover_source', 'landcover_version',
+            'enrichment_status', 'evidence_record', 
+            'landcover_source', 'landcover_version',
             'osm_query_status', 'weather_status', 'population_status',
+            # Added new fields
+            'attribution_status', 'is_tentative', 'evidence_strength',
+            'cropland_fraction', 'tree_fraction', 'shrub_fraction', 'grass_fraction',
+            'other_fraction', 'valid_coverage', 'footprint_method'
         ]
 
 

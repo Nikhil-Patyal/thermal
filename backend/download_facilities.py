@@ -40,6 +40,14 @@ def run():
           node["landuse"="industrial"]({bbox});
           way["landuse"="industrial"]({bbox});
           node["man_made"~"works|chimney"]({bbox});
+          node["industrial"~"refinery|oil|gas|petrochemical|smelter|metallurgical|steel"]({bbox});
+          node["pipeline"="flare"]({bbox});
+          node["substance"~"lng"]({bbox});
+          node["power"="plant"]["generator:source"~"coal|gas|oil"]({bbox});
+          node["landuse"="quarry"]({bbox});
+          node["industrial"="mine"]({bbox});
+          way["industrial"="mine"]({bbox});
+          way["landuse"="quarry"]({bbox});
         );
         out center tags;
         """
@@ -52,6 +60,25 @@ def run():
                     lon = el.get('lon') or el.get('center', {}).get('lon')
                     tags = el.get('tags', {})
                     name = tags.get('name', 'Unknown Facility')
+                    
+                    # More precise categorization based on tags
+                    ind_tag = tags.get('industrial', '')
+                    substance = tags.get('substance', '')
+                    power = tags.get('power', '')
+                    generator = tags.get('generator:source', '')
+                    landuse = tags.get('landuse', '')
+                    man_made = tags.get('man_made', '')
+                    
+                    category = 'Industrial'
+                    if 'refinery' in ind_tag or 'oil' in ind_tag or 'gas' in ind_tag or 'petrochemical' in ind_tag or 'lng' in substance or tags.get('pipeline') == 'flare':
+                        category = 'Oil & Gas / Refinery / LNG'
+                    elif power == 'plant' and generator in ['coal', 'gas', 'oil']:
+                        category = 'Thermal Power Plant'
+                    elif 'smelter' in ind_tag or 'metallurgical' in ind_tag or 'steel' in ind_tag or man_made == 'works':
+                        category = 'Steel / Metallurgical'
+                    elif landuse == 'quarry' or ind_tag == 'mine' or tags.get('mine'):
+                        category = 'Mine / quarry'
+                        
                     if lat and lon:
                         features.append({
                             "type": "Feature",
@@ -61,12 +88,14 @@ def run():
                             },
                             "properties": {
                                 "name": name,
-                                "category": "industrial"
+                                "category": category
                             }
                         })
             elif res.status_code == 429:
                 print("Rate limited by Overpass. Sleeping 10s...")
                 time.sleep(10)
+            else:
+                print(f"Failed with status {res.status_code}: {res.text}")
         except Exception as e:
             print(f"Error fetching tile: {e}")
             
@@ -92,9 +121,10 @@ def run():
     for f in features:
         lon, lat = f['geometry']['coordinates']
         name = f['properties']['name']
+        cat = f['properties']['category']
         objs.append(FacilityCandidate(
             name=name,
-            category='industrial',
+            category=cat,
             geometry=Point(lon, lat, srid=4326)
         ))
         

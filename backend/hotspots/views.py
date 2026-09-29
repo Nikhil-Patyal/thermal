@@ -204,14 +204,13 @@ class HotspotViewSet(viewsets.ReadOnlyModelViewSet):
             latitude__isnull=False, longitude__isnull=False
         )
         
-        # 2. Strict spatial predicate (point-in-polygon)
-        if boundary and boundary.geometry:
-            india_qs = india_qs.filter(location__intersects=boundary.geometry)
+        # We rely only on the bounding box for the Indian region to maintain fast API response times
+        # since SQLite/SpatiaLite ST_Intersects on complex MultiPolygons can be extremely slow.
             
         india_qs = india_qs.order_by('-frp')[:limit]
         
         # Select required fields
-        fields = ['id', 'latitude', 'longitude', 'frp', 'predicted_class', 'source_type', 'processing_status', 'industrial_anomaly_status', 'confidence_score']
+        fields = ['id', 'latitude', 'longitude', 'frp', 'brightness', 'predicted_class', 'source_type', 'processing_status', 'industrial_anomaly_status', 'confidence_score', 'attribution_status', 'is_tentative', 'evidence_strength']
         india_data = list(india_qs.values(*fields))
         
         combined_data = []

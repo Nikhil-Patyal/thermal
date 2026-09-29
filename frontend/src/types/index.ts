@@ -101,6 +101,8 @@ export interface ThermalEvent {
   confidence: number;
   method_scores: MethodScores;
   frp: number;
+  brightness?: number;
+  bright_ti4?: number;
   persistence_days: number;
   detection_age_days: number;
   dist_to_forest: number;

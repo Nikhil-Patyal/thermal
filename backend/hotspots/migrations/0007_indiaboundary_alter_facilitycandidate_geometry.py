@@ -20,9 +20,9 @@ class Migration(migrations.Migration):
                 ('source', models.CharField(blank=True, max_length=255, null=True)),
             ],
         ),
-        migrations.AlterField(
-            model_name='facilitycandidate',
-            name='geometry',
-            field=django.contrib.gis.db.models.fields.GeometryField(blank=True, null=True, srid=4326),
-        ),
+#        migrations.AlterField(
+#            model_name='facilitycandidate',
+#            name='geometry',
+#            field=django.contrib.gis.db.models.fields.GeometryField(blank=True, null=True, srid=4326),
+#        ),
     ]

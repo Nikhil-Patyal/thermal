@@ -39,7 +39,7 @@ export function Sidebar({
   const getIcon = (type: string) => {
     const icons: { [k: string]: string } = {
       'Wildfire': '🔥', 'Industrial Fire': '🏭', 'Gas Flare': '🛢️',
-      'Agriculture Burning': '🌾', 'Mining Activity': '⛏️',
+      'Agriculture Burning': '🌾', 'Mining Activity': '⛏️', 'Volcanic Anomaly': '🌋',
     };
     return icons[type] || '📍';
   };
@@ -50,7 +50,8 @@ export function Sidebar({
       'Industrial Fire': '#f97316',
       'Gas Flare': '#27c016ff',
       'Agriculture Burning': '#b0c64dff',
-      'Mining Activity': '#2e1e18ff'
+      'Mining Activity': '#2e1e18ff',
+      'Volcanic Anomaly': '#ef4444'
     };
     return colors[type] || '#f97316';
   };
@@ -68,6 +69,7 @@ export function Sidebar({
     { type: 'Gas Flare', color: '#27c016' },
     { type: 'Agriculture Burning', color: '#b0c64d' },
     { type: 'Mining Activity', color: '#2e1e18' },
+    { type: 'Volcanic Anomaly', color: '#ef4444' },
   ];
 
   const riskLevels = ['CRITICAL', 'HIGH', 'MODERATE', 'LOW'];

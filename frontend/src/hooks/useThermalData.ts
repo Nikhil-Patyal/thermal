@@ -11,7 +11,7 @@ export interface BackendHotspot {
   lat: number;
   lng: number;
   predicted_class: string | null;
-  confidence_score: number | null;
+  confidence_score: number | string | null;
   fetched_at: string | null;
   economic_exposure: { id: number; gdp: number; industrial_output: number | null } | null;
   air_quality: { id: number; pm25: number | null; no2: number | null; aqi: number | null } | null;
@@ -81,9 +81,22 @@ export function useThermalData() {
     [hotspots]
   );
   const avgConfidence = useMemo(() => {
-    const scored = hotspots.filter((h) => h.confidence_score != null);
+    const scored = hotspots.filter((h) => {
+      if (typeof h.confidence_score === 'number') return true;
+      if (typeof h.confidence_score === 'string' && h.confidence_score.match(/\d+(\.\d+)?/)) return true;
+      return false;
+    });
     if (!scored.length) return 0;
-    return scored.reduce((a, h) => a + (h.confidence_score ?? 0), 0) / scored.length;
+    const total = scored.reduce((a, h) => {
+      let val = 0;
+      if (typeof h.confidence_score === 'number') val = h.confidence_score;
+      else if (typeof h.confidence_score === 'string') {
+        const match = h.confidence_score.match(/\d+(\.\d+)?/);
+        if (match) val = parseFloat(match[0]);
+      }
+      return a + val;
+    }, 0);
+    return Math.round(total / scored.length);
   }, [hotspots]);
 
   // Unique predicted classes for filter dropdown
